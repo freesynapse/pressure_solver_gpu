@@ -67,7 +67,7 @@ void layer::onResize(Event *_e)
     ViewportResizeEvent *e = dynamic_cast<ViewportResizeEvent*>(_e);
     m_vp = e->getViewport();
 
-    glm::ivec2 dim = { 10, 10 };
+    glm::ivec2 dim = { 128, 128 };
     m_velocity   = VectorField(dim, "velocity");
     m_divergence = ScalarField(dim, "divergence");
 
@@ -207,7 +207,7 @@ void layer::test_compute_field()
     Quad::render();
     
     // create quiver for visualization
-    m_quiver = std::make_shared<Arrows2D>(test_field, 1);
+    m_quiver = std::make_shared<Arrows2D>(test_field, 4);
 
     // test_field->saveAsPNG("../assets/screenshots/test.png");
 
