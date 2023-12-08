@@ -2,6 +2,7 @@
 #include "arrows_2D.h"
 
 #include <synapse/API>
+#include <synapse/SynapseCore/Utils/Timer/Timer.hpp>
 
 
 //
@@ -10,16 +11,25 @@ Arrows2D::Arrows2D(const Ref<FieldFBO> &_vector_field, uint32_t _sampling_rate)
     m_dim = _vector_field->getSize();
     m_samplingRate = _sampling_rate;
     m_vertexCount = (m_dim.x / m_samplingRate) * (m_dim.y / m_samplingRate);
-    m_data = new glm::vec4[_vector_field->fieldSize()];
-    _vector_field->readFieldData((void*)&m_data[0]);
 
-    updateData();
+    // create shader
+    m_shader = ShaderLibrary::load("../assets/shaders/visualization/quiver2D.glsl");
+
+    updateData(_vector_field);
 
 }
 
 //---------------------------------------------------------------------------------------
-void Arrows2D::updateData()
+void Arrows2D::updateData(const Ref<FieldFBO> &_vector_field)
 {
+    Timer t;   
+
+    if (m_data != nullptr)
+        delete[] m_data;
+        
+    m_data = new glm::vec4[_vector_field->fieldSize()];
+    _vector_field->readFieldData((void*)&m_data[0]);
+
     m_range = { std::numeric_limits<float>::max(), std::numeric_limits<float>::min() };
     float v_magnitudes[m_vertexCount];
 
@@ -41,7 +51,7 @@ void Arrows2D::updateData()
             m_range[1] = max(m, m_range[1]);
             
             v_magnitudes[v_idx] = m;
-            printf("x %d, y %d : data_idx %d, v_idx %d : v_magnitudes[idx] = %f\n", x, y, data_idx, v_idx, v_magnitudes[v_idx]);
+            // printf("x %d, y %d : data_idx %d, v_idx %d : v_magnitudes[idx] = %f\n", x, y, data_idx, v_idx, v_magnitudes[v_idx]);
 
         }
     }
@@ -77,9 +87,9 @@ void Arrows2D::updateData()
                 .linewidth = 0.1f,
                 .magnitude = v_mag * inv_max_mag, // normalize magnitude [0..1]
             };
-            printf("x %d, y %d, data_idx %d, v_idx %d, dx %f, dy %f : \n", x, y, data_idx, v_idx, dx, dy);
-            V[v_idx].__debug_print();
-            printf("\n");
+            // printf("x %d, y %d, data_idx %d, v_idx %d, dx %f, dy %f : \n", x, y, data_idx, v_idx, dx, dy);
+            // V[v_idx].__debug_print();
+            // printf("\n");
             ndc_pos.x += dx;
 
         }
@@ -102,10 +112,7 @@ void Arrows2D::updateData()
     //
     m_vao = API::newVertexArray(vbo);
 
-    // create shader
-    m_shader = ShaderLibrary::load("../assets/shaders/visualization/quiver2D.glsl");
-
-    SYN_TRACE("Arrows2D object initialized from VectorField.");
+    SYN_TRACE("Arrows2D object initialized from VectorField in ", t.getDeltaTimeMs(), " ms.");
 
 }
 

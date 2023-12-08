@@ -67,7 +67,8 @@ void layer::onResize(Event *_e)
     ViewportResizeEvent *e = dynamic_cast<ViewportResizeEvent*>(_e);
     m_vp = e->getViewport();
 
-    glm::ivec2 dim = { 128, 128 };
+    // glm::ivec2 dim = { 128, 128 };
+    glm::ivec2 dim = Renderer::get().getViewport();
     m_velocity   = VectorField(dim, "velocity");
     m_divergence = ScalarField(dim, "divergence");
 
@@ -83,6 +84,43 @@ void layer::onResize(Event *_e)
 
     m_doUpdate = true;
 
+}
+
+//---------------------------------------------------------------------------------------
+void layer::computeDivergence()
+{
+    return;
+    m_divergence->bind();
+    m_divergenceShader->enable();
+    m_velocity->bindTexture(0);
+    m_divergenceShader->setUniform2fv("u_tx_size", m_cellSize);
+    m_divergenceShader->setUniform1f("u_half_inv_dx", 0.5f / m_dx);
+
+    Quad::render();
+
+}
+
+//---------------------------------------------------------------------------------------
+void layer::test_compute_field()
+{
+    if (test_done)
+        return;
+
+    // bind framebuffer for computation
+    test_field->bind();
+
+    // enable correct shader
+    test_shader->enable();
+    test_shader->setUniform2fv("u_tx_size", m_cellSize);
+    
+    // compute (i.e. render)
+    Quad::render();
+    
+    // create quiver for visualization
+    m_quiver = std::make_shared<Arrows2D>(test_field, 128);
+
+    test_done = true;
+    
 }
 
 //---------------------------------------------------------------------------------------
@@ -177,64 +215,6 @@ void layer::onUpdate(float _dt)
 }
  
 //---------------------------------------------------------------------------------------
-void layer::computeDivergence()
-{
-    return;
-    m_divergence->bind();
-    m_divergenceShader->enable();
-    m_velocity->bindTexture(0);
-    m_divergenceShader->setUniform2fv("u_tx_size", m_cellSize);
-    m_divergenceShader->setUniform1f("u_half_inv_dx", 0.5f / m_dx);
-
-    Quad::render();
-
-}
-
-//---------------------------------------------------------------------------------------
-void layer::test_compute_field()
-{
-    if (test_done)
-        return;
-
-    // bind framebuffer for computation
-    test_field->bind();
-
-    // enable correct shader
-    test_shader->enable();
-    test_shader->setUniform2fv("u_tx_size", m_cellSize);
-    
-    // compute (i.e. render)
-    Quad::render();
-    
-    // create quiver for visualization
-    m_quiver = std::make_shared<Arrows2D>(test_field, 4);
-
-    // test_field->saveAsPNG("../assets/screenshots/test.png");
-
-    // read data into buffer -- working
-    /*
-    std::vector<glm::vec4> pixels(test_field->fieldSize());
-    test_field->readFieldData((void*)&pixels[0]);
-    glm::ivec2 dim = test_field->getSize();
-
-    printf("pixels:\n");
-    for (int y = 0; y < dim.y; y++)
-    {
-        for (int x = 0; x < dim.x; x++)
-        {
-            int idx = y * dim.x + x;
-            glm::vec4 &v = pixels[idx];
-            printf("(%2d, %2d) : %4.2f, %4.2f, %4.2f, %4.2f\n", x, y, v.x, v.y, v.z, v.w);
-        }
-
-    }
-    */
-
-    test_done = true;
-    
-}
-
-//---------------------------------------------------------------------------------------
 void layer::onKeyDownEvent(Event *_e)
 {
     KeyDownEvent *e = dynamic_cast<KeyDownEvent*>(_e);
@@ -249,7 +229,6 @@ void layer::onKeyDownEvent(Event *_e)
             case SYN_KEY_ESCAPE:    EventHandler::push_event(new WindowCloseEvent()); break;
             case SYN_KEY_F4:        m_wireframeMode = !m_wireframeMode; break;
             case SYN_KEY_F5:        m_toggleCulling = !m_toggleCulling; Renderer::setCulling(m_toggleCulling); break;
-        
             default: break;
 
         }

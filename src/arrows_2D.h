@@ -32,7 +32,7 @@ public:
     Arrows2D(const Ref<FieldFBO> &_vector_field, uint32_t _sampling_rate=1);
     ~Arrows2D() { if (m_data) delete[] m_data; }
 
-    void updateData();
+    void updateData(const Ref<FieldFBO> &_vector_field);
     void render();
 
 private:

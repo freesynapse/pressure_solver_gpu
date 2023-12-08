@@ -84,8 +84,8 @@ project "pressure_solver_gpu"
         "dl",           -- dep of glfw
         "X11",          -- dep of glfw (Linux only)
         "atomic",
-        "synapse-dev",
-        -- "synapse",
+        -- "synapse-dev",
+        "synapse",
     }
 
     filter { "configurations.Debug" }

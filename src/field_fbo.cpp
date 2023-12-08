@@ -29,6 +29,7 @@ void FieldFBO::readFieldData(void *_buffer)
     // bind before reading
     this->bind();
 
+    // read into buffer
     glReadPixels(0, 0, m_size.x, m_size.y, m_pxFmt.storageFormat, GL_FLOAT, _buffer);
 
 }
