@@ -28,7 +28,7 @@ layout(binding = 0) uniform sampler2D u_text_sampler;
 void main()
 {
     float val = texture(u_text_sampler, C).x;
-    out_color = vec4(val, 0.0, 0.0, 1.0);
+    out_color = vec4(vec3(val), 1.0);
 
 }
 

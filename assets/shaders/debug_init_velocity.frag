@@ -8,7 +8,9 @@ in vec2 C;
 vec2 f(vec2 C)
 {
     vec2 c = C - 0.5;
-    return normalize(-2*c);
+    
+    return -2 * c;
+    // return normalize(-2*c);
     // return normalize(vec2(-0.5, 0.5));
 }
 

@@ -4,8 +4,6 @@
 layout(location = 0) in vec2 a_position;
 layout(location = 4) in vec2 a_uv;
 
-uniform float u_texel_size;
-
 out vec2 C;
 
 //

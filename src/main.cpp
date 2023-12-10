@@ -5,9 +5,18 @@
 #include "quad.h"
 #include "field_fbo.h"
 #include "arrows_2D.h"
-
+#include "fluid_solver.h"
 
 using namespace Syn;
+
+
+// TODO: refactor into FluidRenderer later
+#define VELOCITY_FIELD      0
+#define DIVERGENCE_FIELD    1
+#define PRESSURE_FIELD      2
+#define CURL_FIELD          3
+#define SPEED_FIELD         4
+
 
 //
 class layer : public Layer
@@ -35,19 +44,22 @@ private:
     Ref<Shader> m_scalarFieldShader = nullptr;
     Ref<Shader> m_vectorFieldShader = nullptr;
 
-    Ref<FieldFBO> test_field = nullptr;
-    Ref<Shader> test_shader = nullptr;
-    void test_compute_field();
-    bool test_done = false;
+    Ref<FluidSolver> m_solver = nullptr;
+
     Ref<Arrows2D> m_quiver = nullptr;
     
-    bool m_doUpdate = false;
-    void computeDivergence();
-    glm::vec2 m_cellSize;
-    float m_aspectRatio;
-    float m_dx = 1.0f;
+    // determine which field is rendering
+    uint32_t m_currentField = DIVERGENCE_FIELD;
+    void nextField() { change_current_field_( 1); }
+    void prevField() { change_current_field_(-1); }
+    void change_current_field_(int _offset);
+    const char *field_ID(uint32_t _field);
+    Shader *m_activeFieldShader = nullptr;
+    FieldFBO *m_activeField = nullptr;
 
     // flags
+    bool m_renderFluid = false;
+    bool m_showQuiver = false;
     bool m_wireframeMode = false;
     bool m_toggleCulling = false;
 
@@ -67,60 +79,16 @@ void layer::onResize(Event *_e)
     ViewportResizeEvent *e = dynamic_cast<ViewportResizeEvent*>(_e);
     m_vp = e->getViewport();
 
-    // glm::ivec2 dim = { 128, 128 };
-    glm::ivec2 dim = Renderer::get().getViewport();
-    m_velocity   = VectorField(dim, "velocity");
-    m_divergence = ScalarField(dim, "divergence");
+    glm::ivec2 dim = Renderer::get().getViewport() / 4;
+    Log::debug_vector(__func__, "dim", dim);
+    m_solver = std::make_shared<FluidSolver>(dim);
+    m_solver->__debug_init_velocity();
+    m_solver->computePressure();
 
-    // -- TESTS init -- //
-    test_field = std::make_shared<FieldFBO>(ColorFormat::RGBA32F, dim, "test_field");
-    test_shader = ShaderLibrary::load(FileName("../assets/shaders/global/stencil.vert"),
-                                      FileName("../assets/shaders/test_vel.frag"));
-    // -- end TESTS -- //
+    m_quiver = std::make_shared<Arrows2D>(m_solver->velocity(), 8);
 
+    m_renderFluid = true;
 
-    m_cellSize = 1.0f / glm::vec2(m_vp.x, m_vp.y);
-    m_aspectRatio = m_vp.y / (float)m_vp.x;
-
-    m_doUpdate = true;
-
-}
-
-//---------------------------------------------------------------------------------------
-void layer::computeDivergence()
-{
-    return;
-    m_divergence->bind();
-    m_divergenceShader->enable();
-    m_velocity->bindTexture(0);
-    m_divergenceShader->setUniform2fv("u_tx_size", m_cellSize);
-    m_divergenceShader->setUniform1f("u_half_inv_dx", 0.5f / m_dx);
-
-    Quad::render();
-
-}
-
-//---------------------------------------------------------------------------------------
-void layer::test_compute_field()
-{
-    if (test_done)
-        return;
-
-    // bind framebuffer for computation
-    test_field->bind();
-
-    // enable correct shader
-    test_shader->enable();
-    test_shader->setUniform2fv("u_tx_size", m_cellSize);
-    
-    // compute (i.e. render)
-    Quad::render();
-    
-    // create quiver for visualization
-    m_quiver = std::make_shared<Arrows2D>(test_field, 128);
-
-    test_done = true;
-    
 }
 
 //---------------------------------------------------------------------------------------
@@ -163,12 +131,6 @@ void layer::onUpdate(float _dt)
 
     // -- START SIMULATION -- //
 
-    if (m_doUpdate)
-    {
-        Quad::bind();
-        computeDivergence();
-        test_compute_field();
-    }
 
     // -- END SIMULATION -- //
 
@@ -178,20 +140,23 @@ void layer::onUpdate(float _dt)
     renderer.clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 
-    // -- BEGINNING OF SCENE -- //
+    // -- BEGINNING OF FIELD RENDERING -- //
 
-    if (test_done)
+    if (m_renderFluid)
     {
-        // if tests are completed, visualize the result in the render buffer
-        m_vectorFieldShader->enable();
-        test_field->bindTexture(0);
-        // the value of the sampler2D is set to the corresponding texture slot (above)
-        m_vectorFieldShader->setUniform1i("u_text_sampler", 0);
-
-        Quad::render();
+        Quad::bind();
         
-        if (m_quiver)
-           m_quiver->render();
+        //
+        if (m_activeField != nullptr)
+        {
+            m_activeFieldShader->enable();
+            m_activeField->bindTexture(0);
+            m_activeFieldShader->setUniform1i("u_text_sampler", 0);    
+            Quad::render();
+        } 
+        
+        if (m_quiver && m_showQuiver)
+          m_quiver->render();
 
     }
 
@@ -208,6 +173,7 @@ void layer::onUpdate(float _dt)
     int i = 0;
     m_font->beginRenderBlock();
 	m_font->addString(2.0f, fontHeight * ++i, "fps=%.0f  VSYNC=%s", TimeStep::getFPS(), Application::get().getWindow().isVSYNCenabled() ? "ON" : "OFF");
+    m_font->addString(2.0f, fontHeight * ++i, "Active field: %s (%d)", field_ID(m_currentField), m_currentField);
     m_font->endRenderBlock();
 
     //
@@ -229,6 +195,10 @@ void layer::onKeyDownEvent(Event *_e)
             case SYN_KEY_ESCAPE:    EventHandler::push_event(new WindowCloseEvent()); break;
             case SYN_KEY_F4:        m_wireframeMode = !m_wireframeMode; break;
             case SYN_KEY_F5:        m_toggleCulling = !m_toggleCulling; Renderer::setCulling(m_toggleCulling); break;
+
+            case SYN_KEY_LEFT:      prevField(); break;
+            case SYN_KEY_RIGHT:     nextField(); break;
+            
             default: break;
 
         }
@@ -324,4 +294,36 @@ void layer::onImGuiRender()
     // end root
     ImGui::End();
 
+}
+
+//---------------------------------------------------------------------------------------
+void layer::change_current_field_(int _offset)
+{
+    m_currentField = (m_currentField + _offset + 5) % 5;
+    // set active field for rendering
+    switch(m_currentField)
+    {
+        case VELOCITY_FIELD:    m_activeField = m_solver->velocity().get();     m_activeFieldShader = m_vectorFieldShader.get(); break;
+        case DIVERGENCE_FIELD:  m_activeField = m_solver->divergence().get();   m_activeFieldShader = m_scalarFieldShader.get(); break;
+        case PRESSURE_FIELD:    m_activeField = m_solver->pressure().get();     m_activeFieldShader = m_scalarFieldShader.get(); break;
+        case CURL_FIELD:        m_activeField = m_solver->curl().get();         m_activeFieldShader = m_scalarFieldShader.get(); break;
+        case SPEED_FIELD:       m_activeField = m_solver->speed().get();        m_activeFieldShader = m_scalarFieldShader.get(); break;
+        
+        default: m_activeField = nullptr; m_activeFieldShader = nullptr; break;
+    }
+
+}
+
+//---------------------------------------------------------------------------------------
+const char *layer::field_ID(uint32_t _field)
+{
+    switch(_field)
+    {
+        case VELOCITY_FIELD:    return "VELOCITY_FIELD";    break;
+        case DIVERGENCE_FIELD:  return "DIVERGENCE_FIELD";  break;
+        case PRESSURE_FIELD:    return "PRESSURE_FIELD";    break;
+        case CURL_FIELD:        return "CURL_FIELD";        break;
+        case SPEED_FIELD:       return "SPEED_FIELD";       break;
+        default:                return "UNKNOWN FIELD";     break;
+    }
 }
