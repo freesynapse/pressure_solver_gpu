@@ -40,6 +40,7 @@ FluidSolver::FluidSolver(const glm::ivec2 _dim)
                             FileName("../assets/shaders/solver/pressure.frag"));
 
     m_initialized = true;
+    SYN_TRACE("FluidSolver initialized [ ", m_dim.x, " x ", m_dim.y, " ]");
 
 }
 
@@ -119,10 +120,12 @@ void FluidSolver::computeDivergence()
 
     m_divergence->bind();
     m_divergenceShader->enable();
-    m_velocity->bindTexture(0);
 
+    m_divergenceShader->setUniform1i("u_velocity", 0);
     m_divergenceShader->setUniform2fv("u_tx_size", m_cellSize);
     m_divergenceShader->setUniform1f("u_half_inv_dx", 0.5f / m_dx);
+
+    m_velocity->bindTexture(0);
 
     Quad::render();
 
@@ -140,6 +143,9 @@ void FluidSolver::computePressure()
 
     m_pressureShader->setUniform2fv("u_tx_size", m_cellSize);
     m_pressureShader->setUniform1f("u_dx2", std::pow(m_dx, 2));
+
+    m_pressureShader->setUniform1i("u_pressure", 0);
+    m_pressureShader->setUniform1i("u_divergence", 1);
 
     m_divergence->bindTexture(1);
 

@@ -14,12 +14,8 @@ public:
 	FieldFBO(const ColorFormat& _format=ColorFormat::RGBA32F, 
 				const glm::ivec2& _size=glm::ivec2(0),
 				const std::string& _name="");
-
-	//
-	// get texture data eller så, så att vi kan inspektera ?
 	
-	/* Reads the texure into a _buffer.
-		*/
+	// Reads the texure into _buffer.
 	void readFieldData(void *_buffer);
 	uint32_t fieldSizeFloats() { return (m_size.x * m_size.y * getPixelFmtChannels(m_format)); }
 	uint32_t fieldSize() { return (m_size.x * m_size.y); }

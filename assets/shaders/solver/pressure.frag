@@ -3,8 +3,8 @@
 
 layout (location = 0) out vec4 P;
 
-layout (binding = 1) uniform sampler2D u_pressure;
-layout (binding = 0) uniform sampler2D u_divergence;
+layout (binding = 0) uniform sampler2D u_pressure;
+layout (binding = 1) uniform sampler2D u_divergence;
 
 uniform float u_dx2;
 

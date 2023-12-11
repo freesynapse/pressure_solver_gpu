@@ -49,13 +49,14 @@ private:
     Ref<Arrows2D> m_quiver = nullptr;
     
     // determine which field is rendering
-    uint32_t m_currentField = DIVERGENCE_FIELD;
+    uint32_t m_currentField = 0;
     void nextField() { change_current_field_( 1); }
     void prevField() { change_current_field_(-1); }
     void change_current_field_(int _offset);
     const char *field_ID(uint32_t _field);
     Shader *m_activeFieldShader = nullptr;
     FieldFBO *m_activeField = nullptr;
+    void __debug_active_field();
 
     // flags
     bool m_renderFluid = false;
@@ -79,14 +80,14 @@ void layer::onResize(Event *_e)
     ViewportResizeEvent *e = dynamic_cast<ViewportResizeEvent*>(_e);
     m_vp = e->getViewport();
 
-    glm::ivec2 dim = Renderer::get().getViewport() / 4;
-    Log::debug_vector(__func__, "dim", dim);
+    glm::ivec2 dim = Renderer::get().getViewport() / 256;
     m_solver = std::make_shared<FluidSolver>(dim);
     m_solver->__debug_init_velocity();
     m_solver->computePressure();
 
-    m_quiver = std::make_shared<Arrows2D>(m_solver->velocity(), 8);
+    m_quiver = std::make_shared<Arrows2D>(m_solver->velocity(), 1);
 
+    change_current_field_(0);
     m_renderFluid = true;
 
 }
@@ -196,9 +197,13 @@ void layer::onKeyDownEvent(Event *_e)
             case SYN_KEY_F4:        m_wireframeMode = !m_wireframeMode; break;
             case SYN_KEY_F5:        m_toggleCulling = !m_toggleCulling; Renderer::setCulling(m_toggleCulling); break;
 
+            case SYN_KEY_TAB:       m_showQuiver = !m_showQuiver; break;
+
             case SYN_KEY_LEFT:      prevField(); break;
             case SYN_KEY_RIGHT:     nextField(); break;
             
+            case SYN_KEY_F:         __debug_active_field(); break;
+
             default: break;
 
         }
@@ -327,3 +332,27 @@ const char *layer::field_ID(uint32_t _field)
         default:                return "UNKNOWN FIELD";     break;
     }
 }
+
+//---------------------------------------------------------------------------------------
+void layer::__debug_active_field()
+{
+    int dim = (m_currentField == VELOCITY_FIELD ? 2 : 1);
+    glm::vec4 buffer[m_activeField->fieldSize()];
+    m_activeField->readFieldData((void*)&buffer[0]);
+    glm::ivec2 sz = m_activeField->getSize();
+    printf("---- __debug_active_field() : %s (dim %d) ----\n", field_ID(m_currentField), dim);
+    for (int y = 0; y < sz.y; y++)
+    {
+        for (int x = 0; x < sz.x; x++)
+        {
+            glm::vec4 v = buffer[y * sz.x + x];
+            printf("(%d, %d) = [ ", x, y);
+            for (int i = 0; i < dim; i++)
+                printf("%.2f ", v[i]);
+            printf("], \t");
+        }
+        printf("\n");
+    }
+}
+
+
